@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"sync"
@@ -67,8 +68,12 @@ func resourceFetcher(cli *http.Client, urls <-chan string) <-chan *HttpPair {
 }
 
 // read HTTP request/response-pair from channel and do something with it (print it)
-func resourceConsumer(msgs <-chan *HttpPair) {
+func resourceConsumer(msgs <-chan *HttpPair, consumeBody bool) {
 	for msg := range msgs {
+		if consumeBody {
+			ioutil.ReadAll(msg.Resp.Body)
+		}
+
 		fmt.Printf("%v %v %v\n", msg.Req.URL, msg.Resp.Status, msg.Time)
 		msg.Resp.Body.Close()
 	}
@@ -102,6 +107,7 @@ func main() {
 	var urlFile = flag.String("url-file", "", "file containing a newline separated list of URLs")
 	var nfetchers = flag.Int("n-fetchers", 20, "number of concurrent HTTP fetchers")
 	var httpTimeout = flag.Duration("http-timeout", 20*time.Second, "HTTP client timeout")
+	var consumeBody = flag.Bool("consume-body", false, "consume http response body")
 	flag.Parse()
 
 	cli := &http.Client{Timeout: *httpTimeout}
@@ -122,5 +128,5 @@ func main() {
 	}
 
 	msgChan := mergeChans(ms)
-	resourceConsumer(msgChan)
+	resourceConsumer(msgChan, *consumeBody)
 }
